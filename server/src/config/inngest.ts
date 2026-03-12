@@ -10,12 +10,12 @@ type CreateUserInput = Omit<User, "createdAt" | "updatedAt">
 
 export const inngest = new Inngest({
     id: "mock-interview",
-    eventKey: process.env.INGEST_EVENT_KEY!,
+    eventKey: process.env.INNGEST_EVENT_KEY!,
  });
 
 const syncUser = inngest.createFunction(
     { id: "sync-user" },
-    { event: "user.created" },
+    { event: "clerk/user.created" },
     async({ event })=> {
     await connectDB();
     const { id, email_addresses, first_name, last_name, image_url, } = event.data;
@@ -32,7 +32,7 @@ const syncUser = inngest.createFunction(
 
 const deleteUser = inngest.createFunction(
     { id: "delete-user" },
-    { event: "user.deleted" },
+    { event: "clerk/user.deleted" },
     async({ event })=> {
         await connectDB();
         const { id } = event.data;
