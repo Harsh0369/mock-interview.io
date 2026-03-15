@@ -1,4 +1,4 @@
-import { Inngest } from "inngest";
+import { Inngest, step } from "inngest";
 import { connectDB } from "./db.js";
 import { UserModel } from "../models/User.js";
 import { User } from "../models/User.js";
@@ -21,6 +21,7 @@ const syncUser = inngest.createFunction(
     async({ event })=> {
     await connectDB();
         const { id, email_addresses, first_name, last_name, image_url, } = event.data;
+        console.log(email_addresses);
         
         const userExists = await UserModel.findOne({ clerkId: id });
         if (userExists) {
@@ -44,30 +45,50 @@ const syncUser = inngest.createFunction(
             profileImage: newUser.profileImage
         });
         //Sending welcome mail
-        await sendEmail(newUser.email, "Welcome to Mock Interview!", `
-            <h1>Welcome to Mock Interview, ${newUser.name}!</h1>
-            <p>We're excited to have you on board. Get ready to ace your interviews with our platform!</p>
-            <p>Best regards,<br/>The Mock Interview Team</p>
-        `);
+        await step.run("send-welcome-email", async () => {
+            await sendEmail(newUser.email, "Welcome to Mock Interview!", `
+                <h1>Welcome to Mock Interview, ${newUser.name}!</h1>
+                <p>We're excited to have you on board. If you have any questions or need assistance, feel free to reach out to our support team.</p>
+                <p>Best regards,<br/>The Mock Interview Team</p>
+            `);
+        });
     })
 
 const deleteUser = inngest.createFunction(
-    { id: "delete-user" },
-    { event: "clerk/user.deleted" },
-    async({ event })=> {
-        await connectDB();
-        const { id } = event.data;
-        //Deleting user from our DB
-        await UserModel.findOneAndDelete({ clerkId: id });
-        //Deleting user from Stream
-        await deleteStreamUser(id);
-        //Sending delete email
-        await sendEmail(event.data.email_addresses[0].email_address, "Sorry to see you go!", `
-            <h1>Goodbye from Mock Interview, ${event.data.first_name}!</h1>
-            <p>We're sorry to see you go. If you have any feedback or suggestions, please let us know.</p>
-            <p>Best regards,<br/>The Mock Interview Team</p>
-        `);
+  { id: "delete-user" },
+  { event: "clerk/user.deleted" },
+  async ({ event, step }) => {
+    await connectDB();
+
+    const { id } = event.data;
+
+    // find user first
+    const user = await UserModel.findOne({ clerkId: id });
+
+    if (!user) {
+      console.log("User not found in DB");
+      return;
     }
-)
+
+    // delete from DB
+    await UserModel.findOneAndDelete({ clerkId: id });
+
+    // delete from Stream
+    await deleteStreamUser(id);
+
+    // send email
+    await step.run("send-delete-email", async () => {
+      await sendEmail(
+        user.email,
+        "Sorry to see you go!",
+        `
+        <h1>Goodbye from Mock Interview, ${user.name}!</h1>
+        <p>We're sorry to see you go. If you have feedback or suggestions, please let us know.</p>
+        <p>Best regards,<br/>The Mock Interview Team</p>
+        `,
+      );
+    });
+  },
+);
 
 export const functions = [syncUser, deleteUser];
