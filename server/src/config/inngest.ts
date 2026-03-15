@@ -2,6 +2,7 @@ import { Inngest } from "inngest";
 import { connectDB } from "./db.js";
 import { UserModel } from "../models/User.js";
 import { User } from "../models/User.js";
+import { upsertUser,deleteStreamUser } from "./stream.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -28,6 +29,11 @@ const syncUser = inngest.createFunction(
             profileImage: image_url
         }
         await UserModel.create(newUser);
+        await upsertUser({
+            id: newUser.clerkId,
+            name: newUser.name,
+            profileImage: newUser.profileImage
+        });
     })
 
 const deleteUser = inngest.createFunction(
@@ -37,6 +43,7 @@ const deleteUser = inngest.createFunction(
         await connectDB();
         const { id } = event.data;
         await UserModel.findOneAndDelete({ clerkId: id });
+        await deleteStreamUser(id);
     }
 )
 
